@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -31,7 +30,9 @@ type Input struct {
 
 type POST struct {
 	URL         string
+	Referer     string
 	ActionPath  string
+	ContentType string
 	Username    string
 	Password    string
 	TokenName   string
@@ -54,7 +55,9 @@ func main() {
 	}
 
 	if formFileFlag != "" {
-		tryLoginPass()
+		if err := tryLoginPass(); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -68,7 +71,6 @@ func tryLoginPass() error {
 	if err != nil {
 		return fmt.Errorf("grabing cookie and token: %s", err)
 	}
-	log.Printf("Grabbed fresh authenticity token %s and cookie %s=%s\n", token, cookie.Name, cookie.Value)
 	post.TokenVal = token
 
 	u, err := url.ParseRequestURI(post.URL)
@@ -79,20 +81,51 @@ func tryLoginPass() error {
 	u.Path = post.ActionPath
 	log.Printf("Posting at %s\n", u)
 
-	form := url.Values{}
-	form.Set(post.TokenName, post.TokenVal)
-	form.Set(post.Username, usernameFlag)
-	form.Set(post.Password, "2iygr1orj")
+	pass := "2r2o3rhou333"
+	var body string
+	if post.ContentType == "application/json" {
+		data := make(map[string]interface{})
+		data[post.Username] = usernameFlag
+		data[post.Password] = pass
+		for _, input := range post.ExtraInputs {
+			data[input.Name] = input.Value
+		}
+		b, err := json.Marshal(data)
+		if err != nil {
+			return err
+		}
+		body = string(b)
+	} else {
+		form := url.Values{}
+		if token != "" {
+			log.Printf("Set authenticity token %s\n", token)
+			form.Set(post.TokenName, post.TokenVal)
+		}
+		form.Set(post.Username, usernameFlag)
+		form.Set(post.Password, pass)
 
-	for _, input := range post.ExtraInputs {
-		form.Set(input.Name, input.Value)
+		for _, input := range post.ExtraInputs {
+			form.Set(input.Name, input.Value)
+		}
+		body = form.Encode()
 	}
-	encoded := form.Encode()
-	req, err := http.NewRequest("POST", u.String(), strings.NewReader(encoded))
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Content-Length", strconv.Itoa(len(encoded)))
+
+	req, err := http.NewRequest("POST", u.String(), strings.NewReader(body))
+	req.Header.Add("Content-Length", strconv.Itoa(len(body)))
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0")
-	req.AddCookie(cookie)
+	if post.ContentType == "application/json" {
+		req.Header.Add("Content-Type", "application/json")
+	} else {
+		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	}
+	if post.Referer != "" {
+		req.Header.Add("Referer", post.Referer)
+	}
+
+	if cookie != nil {
+		log.Printf("Set cookie %s=%s\n", cookie.Name, cookie.Value)
+		req.AddCookie(cookie)
+	}
 
 	dump, err := httputil.DumpRequestOut(req, true)
 	if err != nil {
@@ -119,7 +152,14 @@ func tryLoginPass() error {
 	if err != nil {
 		return err
 	}
-	ioutil.WriteFile("response.html", b, 0666)
+	if len(b) < 200 {
+		log.Println("----------- Response---------")
+		log.Printf("%s\n", b)
+		log.Println("-----------------------------")
+
+	} else {
+		ioutil.WriteFile("response.html", b, 0666)
+	}
 	log.Printf("Status: %d, Length: %d, Server processing: %s\n", resp.StatusCode, len(b), serverDone.Sub(serverStart))
 
 	return nil
@@ -148,9 +188,6 @@ func grabAuthenticityTokenAndCookie(url string) (string, *http.Cookie, error) {
 	for _, c := range res.Cookies() {
 		cookie = c
 		break
-	}
-	if cookie == nil {
-		return tok, nil, errors.New("no cookies found in response")
 	}
 
 	return tok, cookie, nil
