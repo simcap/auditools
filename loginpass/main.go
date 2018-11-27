@@ -1,18 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"net/http/httptrace"
-	"net/http/httputil"
-	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,12 +15,33 @@ import (
 )
 
 var (
-	urlFlag      string
-	formFileFlag string
-	usernameFlag string
-	passwordFlag string
-	verboseFlag  bool
+	urlFlag               string
+	formFileFlag          string
+	passwordsFilepathFlag string
+	usernamesFilepathFlag string
+	verboseFlag           bool
 )
+
+type Signature struct {
+	RedirectCount        int
+	StatusCode           int
+	ResponseSize         int
+	ServerProcessingTime time.Duration
+}
+
+func (s Signature) String() string {
+	return fmt.Sprintf("Redirects: %d, Status: %d, Length: %d, ServerProcessing: %s", s.RedirectCount, s.StatusCode, s.ResponseSize, s.ServerProcessingTime)
+}
+
+func (s Signature) IsCandidate(base *Signature) bool {
+	if s.RedirectCount != base.RedirectCount || s.StatusCode != base.StatusCode {
+		return true
+	}
+	if (s.ResponseSize/base.ResponseSize)*10 > 11 {
+		return true
+	}
+	return false
+}
 
 type Input struct {
 	Name, Value string
@@ -46,8 +62,8 @@ type POST struct {
 func main() {
 	flag.StringVar(&urlFlag, "url", "", "URL of the resource")
 	flag.StringVar(&formFileFlag, "form-file", "", "Path of the form file to use")
-	flag.StringVar(&usernameFlag, "username", "", "Username to try")
-	flag.StringVar(&passwordFlag, "pass", "azerty%%654", "Password to try")
+	flag.StringVar(&usernamesFilepathFlag, "usernames", "usernames", "Path to file containing multiline potential usernames")
+	flag.StringVar(&passwordsFilepathFlag, "passwords", "passwords", "Path to file containing multiline potential passwords")
 	flag.BoolVar(&verboseFlag, "v", false, "Verbose mode")
 
 	flag.Parse()
@@ -60,146 +76,48 @@ func main() {
 	}
 
 	if formFileFlag != "" {
-		if err := tryLoginPass(); err != nil {
+		file, err := os.Open(formFileFlag)
+		if err != nil {
 			log.Fatal(err)
 		}
+		defer file.Close()
+
+		post := new(POST)
+		if err := json.NewDecoder(file).Decode(post); err != nil {
+			log.Fatal(err)
+		}
+
+		candidater := &Candidater{
+			post:      post,
+			usernames: fileToArr(usernamesFilepathFlag),
+			passwords: fileToArr(passwordsFilepathFlag),
+		}
+
+		if err := candidater.Run(); err != nil {
+			log.Fatal(err)
+		}
+
+		log.Printf("Candidates: %v", candidater.candidates)
 	}
 }
 
-func tryLoginPass() error {
-	file, err := os.Open(formFileFlag)
-	var post POST
-	dec := json.NewDecoder(file)
-	dec.Decode(&post)
-
-	token, cookie, err := grabAuthenticityTokenAndCookie(post.URL)
+func fileToArr(path string) (out []string) {
+	file, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("grabing cookie and token: %s", err)
+		log.Fatal(err)
 	}
-	post.TokenVal = token
+	defer file.Close()
 
-	u, err := url.ParseRequestURI(post.URL)
-	if err != nil {
-		return err
-	}
-
-	u.Path = post.ActionPath
-	verbose("Posting at %s", u)
-
-	var body string
-	if post.ContentType == "application/json" {
-		data := make(map[string]interface{})
-		data[post.Username] = usernameFlag
-		data[post.Password] = passwordFlag
-		for _, input := range post.ExtraInputs {
-			data[input.Name] = input.Value
-		}
-		b, err := json.Marshal(data)
-		if err != nil {
-			return err
-		}
-		body = string(b)
-	} else {
-		form := url.Values{}
-		if token != "" {
-			verbose("Set authenticity token %s", token)
-			form.Set(post.TokenName, post.TokenVal)
-		}
-		form.Set(post.Username, usernameFlag)
-		form.Set(post.Password, passwordFlag)
-
-		for _, input := range post.ExtraInputs {
-			form.Set(input.Name, input.Value)
-		}
-		body = form.Encode()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		out = append(out, strings.TrimSpace(scanner.Text()))
 	}
 
-	req, err := http.NewRequest("POST", u.String(), strings.NewReader(body))
-	req.Header.Add("Content-Length", strconv.Itoa(len(body)))
-	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0")
-	if post.ContentType == "application/json" {
-		req.Header.Add("Content-Type", "application/json")
-	} else {
-		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	}
-	if post.Referer != "" {
-		req.Header.Add("Referer", post.Referer)
+	if err := scanner.Err(); err != nil {
+		log.Fatal(err)
 	}
 
-	if cookie != nil {
-		verbose("Set cookie %s=%s", cookie.Name, cookie.Value)
-		req.AddCookie(cookie)
-	}
-
-	dump, err := httputil.DumpRequestOut(req, true)
-	if err != nil {
-		return err
-	}
-	verbose("------------------------------------------------\n%s\n--------------------------------------------", dump)
-
-	var serverStart, serverDone time.Time
-	trace := &httptrace.ClientTrace{
-		WroteRequest:         func(info httptrace.WroteRequestInfo) { serverStart = time.Now() },
-		GotFirstResponseByte: func() { serverDone = time.Now() },
-	}
-	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
-
-	var redirectCount int
-	client := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			redirectCount++
-			verbose("Redirecting to %s (%d)", req.URL, len(via))
-			if len(via) >= 10 {
-				return errors.New("stopped after 10 redirects")
-			}
-			return nil
-		},
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if len(b) < 200 {
-		verbose("----------- Response---------\n%s\n-----------------------------", b)
-	} else {
-		ioutil.WriteFile("response.html", b, 0666)
-	}
-	log.Printf("Redirect: %d, Status: %d, Length: %d, Server processing: %s\n", redirectCount, resp.StatusCode, len(b), serverDone.Sub(serverStart))
-
-	return nil
-}
-
-func grabAuthenticityTokenAndCookie(url string) (string, *http.Cookie, error) {
-	res, err := http.Get(url)
-	if err != nil {
-		return "", nil, err
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != 200 {
-		return "", nil, fmt.Errorf("status code error: %d %s", res.StatusCode, res.Status)
-	}
-
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		return "", nil, err
-	}
-
-	csrfToken := doc.Find("head > meta[name='csrf-token']").First()
-	tok, _ := csrfToken.Attr("content")
-
-	var cookie *http.Cookie
-	for _, c := range res.Cookies() {
-		cookie = c
-		break
-	}
-
-	return tok, cookie, nil
+	return
 }
 
 func createFormFile() error {
