@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -22,6 +23,8 @@ var (
 	urlFlag      string
 	formFileFlag string
 	usernameFlag string
+	passwordFlag string
+	verboseFlag  bool
 )
 
 type Input struct {
@@ -44,6 +47,8 @@ func main() {
 	flag.StringVar(&urlFlag, "url", "", "URL of the resource")
 	flag.StringVar(&formFileFlag, "form-file", "", "Path of the form file to use")
 	flag.StringVar(&usernameFlag, "username", "", "Username to try")
+	flag.StringVar(&passwordFlag, "pass", "azerty%%654", "Password to try")
+	flag.BoolVar(&verboseFlag, "v", false, "Verbose mode")
 
 	flag.Parse()
 	log.SetFlags(0)
@@ -79,14 +84,13 @@ func tryLoginPass() error {
 	}
 
 	u.Path = post.ActionPath
-	log.Printf("Posting at %s\n", u)
+	verbose("Posting at %s", u)
 
-	pass := "2r2o3rhou333"
 	var body string
 	if post.ContentType == "application/json" {
 		data := make(map[string]interface{})
 		data[post.Username] = usernameFlag
-		data[post.Password] = pass
+		data[post.Password] = passwordFlag
 		for _, input := range post.ExtraInputs {
 			data[input.Name] = input.Value
 		}
@@ -98,11 +102,11 @@ func tryLoginPass() error {
 	} else {
 		form := url.Values{}
 		if token != "" {
-			log.Printf("Set authenticity token %s\n", token)
+			verbose("Set authenticity token %s", token)
 			form.Set(post.TokenName, post.TokenVal)
 		}
 		form.Set(post.Username, usernameFlag)
-		form.Set(post.Password, pass)
+		form.Set(post.Password, passwordFlag)
 
 		for _, input := range post.ExtraInputs {
 			form.Set(input.Name, input.Value)
@@ -123,7 +127,7 @@ func tryLoginPass() error {
 	}
 
 	if cookie != nil {
-		log.Printf("Set cookie %s=%s\n", cookie.Name, cookie.Value)
+		verbose("Set cookie %s=%s", cookie.Name, cookie.Value)
 		req.AddCookie(cookie)
 	}
 
@@ -131,9 +135,7 @@ func tryLoginPass() error {
 	if err != nil {
 		return err
 	}
-	log.Println("--------------------------------------------")
-	log.Printf("%s", dump)
-	log.Println("--------------------------------------------")
+	verbose("------------------------------------------------\n%s\n--------------------------------------------", dump)
 
 	var serverStart, serverDone time.Time
 	trace := &httptrace.ClientTrace{
@@ -142,7 +144,17 @@ func tryLoginPass() error {
 	}
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 
-	client := &http.Client{}
+	var redirectCount int
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			redirectCount++
+			verbose("Redirecting to %s (%d)", req.URL, len(via))
+			if len(via) >= 10 {
+				return errors.New("stopped after 10 redirects")
+			}
+			return nil
+		},
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -153,14 +165,11 @@ func tryLoginPass() error {
 		return err
 	}
 	if len(b) < 200 {
-		log.Println("----------- Response---------")
-		log.Printf("%s\n", b)
-		log.Println("-----------------------------")
-
+		verbose("----------- Response---------\n%s\n-----------------------------", b)
 	} else {
 		ioutil.WriteFile("response.html", b, 0666)
 	}
-	log.Printf("Status: %d, Length: %d, Server processing: %s\n", resp.StatusCode, len(b), serverDone.Sub(serverStart))
+	log.Printf("Redirect: %d, Status: %d, Length: %d, Server processing: %s\n", redirectCount, resp.StatusCode, len(b), serverDone.Sub(serverStart))
 
 	return nil
 }
@@ -262,4 +271,10 @@ func createFormFile() error {
 	enc.Encode(post)
 
 	return nil
+}
+
+func verbose(msg string, a ...interface{}) {
+	if verboseFlag {
+		log.Printf(msg, a...)
+	}
 }
