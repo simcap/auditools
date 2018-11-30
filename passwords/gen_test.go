@@ -15,11 +15,7 @@ func TestGenerateToExploreOutput(t *testing.T) {
 
 	fmt.Printf("Generating with stem %s\n\n", *stemFlag)
 
-	all, err := passwords.Gen(*stemFlag)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, p := range all {
+	for _, p := range passwords.Gen(*stemFlag) {
 		fmt.Println(p)
 	}
 }

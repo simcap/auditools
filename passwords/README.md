@@ -1,6 +1,9 @@
 # Passwords
 
-Simply generates top common passwords and passwords with common patterns given a stem
+Simple library for password generation
+
+    * top common passwords
+    * passwords with common patterns given a stem
 
 To see it in action:
 

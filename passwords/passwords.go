@@ -13,7 +13,7 @@ type generator func(s string) []string
 
 type transform func(g generator, s string) generator
 
-func Gen(stem string) ([]string, error) {
+func Gen(stem string) []string {
 	var all []string
 
 	funcs := []generator{
@@ -34,7 +34,7 @@ func Gen(stem string) ([]string, error) {
 
 	sort.Strings(all)
 
-	return all, nil
+	return all
 }
 
 func tranToDigits(g generator) generator {
