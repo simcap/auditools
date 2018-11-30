@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -9,25 +8,20 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/simcap/sectools/passwords"
 )
 
 var (
-	urlFlag               string
-	formFileFlag          string
-	passwordsFilepathFlag string
-	usernamesFilepathFlag string
-	verboseFlag           bool
+	urlFlag          string
+	formFileFlag     string
+	basicAuthURLFlag string
+	usernamesFlag    string
+	jitterFlag       int
+	waitTimeFlag     int
+	verboseFlag      bool
 )
-
-type Signature struct {
-	RedirectCount        int
-	StatusCode           int
-	ResponseSize         int
-	ServerProcessingTime time.Duration
-}
 
 func (s Signature) String() string {
 	return fmt.Sprintf("Redirects: %d, Status: %d, Length: %d, ServerProcessing: %s", s.RedirectCount, s.StatusCode, s.ResponseSize, s.ServerProcessingTime)
@@ -62,8 +56,10 @@ type POST struct {
 func main() {
 	flag.StringVar(&urlFlag, "url", "", "URL of the resource")
 	flag.StringVar(&formFileFlag, "form-file", "", "Path of the form file to use")
-	flag.StringVar(&usernamesFilepathFlag, "usernames", "usernames", "Path to file containing multiline potential usernames")
-	flag.StringVar(&passwordsFilepathFlag, "passwords", "passwords", "Path to file containing multiline potential passwords")
+	flag.StringVar(&basicAuthURLFlag, "basicauth-url", "", "URL of the basic auth")
+	flag.StringVar(&usernamesFlag, "usernames", "", "Comma separated list of potential usernames")
+	flag.IntVar(&waitTimeFlag, "wait", 5, "Wait time in seconds between 2 requests")
+	flag.IntVar(&jitterFlag, "jitter", 5, "Jitter interval in seconds to randomize wait time between requests")
 	flag.BoolVar(&verboseFlag, "v", false, "Verbose mode")
 
 	flag.Parse()
@@ -75,6 +71,7 @@ func main() {
 		}
 	}
 
+	var poster Poster
 	if formFileFlag != "" {
 		file, err := os.Open(formFileFlag)
 		if err != nil {
@@ -86,40 +83,26 @@ func main() {
 		if err := json.NewDecoder(file).Decode(post); err != nil {
 			log.Fatal(err)
 		}
-
-		candidater := &Candidater{
-			post:      post,
-			usernames: fileToArr(usernamesFilepathFlag),
-			passwords: fileToArr(passwordsFilepathFlag),
-		}
-
-		log.Printf("Estimated max time %d mins", (len(candidater.usernames)*len(candidater.usernames)*15)/60)
-
-		if err := candidater.Run(); err != nil {
-			log.Fatal(err)
-		}
-
-		log.Printf("Candidates: %v", candidater.candidates)
-	}
-}
-
-func fileToArr(path string) (out []string) {
-	file, err := os.Open(path)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		out = append(out, strings.TrimSpace(scanner.Text()))
+		poster = &formPoster{post}
 	}
 
-	if err := scanner.Err(); err != nil {
+	if basicAuthURLFlag != "" {
+		poster = &basicAuthPoster{basicAuthURLFlag}
+	}
+
+	candidater := NewCandidater(poster)
+	candidater.usernames = strings.Split(usernamesFlag, ",")
+	candidater.passwords = passwords.Gen(poster.URL())
+	candidater.waitTime = waitTimeFlag
+	candidater.jitter = jitterFlag
+
+	log.Printf("Estimated max time %d mins", candidater.EstimatedMaxTime())
+
+	if err := candidater.Run(); err != nil {
 		log.Fatal(err)
 	}
 
-	return
+	log.Printf("Candidates: %v", candidater.candidates)
 }
 
 func createFormFile() error {
