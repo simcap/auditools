@@ -23,36 +23,6 @@ var (
 	verboseFlag      bool
 )
 
-func (s Signature) String() string {
-	return fmt.Sprintf("Redirects: %d, Status: %d, Length: %d, ServerProcessing: %s", s.RedirectCount, s.StatusCode, s.ResponseSize, s.ServerProcessingTime)
-}
-
-func (s Signature) IsCandidate(base *Signature) bool {
-	if s.RedirectCount != base.RedirectCount || s.StatusCode != base.StatusCode {
-		return true
-	}
-	if (s.ResponseSize/base.ResponseSize)*10 > 11 {
-		return true
-	}
-	return false
-}
-
-type Input struct {
-	Name, Value string
-}
-
-type POST struct {
-	URL         string
-	Referer     string
-	ActionPath  string
-	ContentType string
-	Username    string
-	Password    string
-	TokenName   string
-	TokenVal    string
-	ExtraInputs []Input
-}
-
 func main() {
 	flag.StringVar(&urlFlag, "url", "", "URL of the resource")
 	flag.StringVar(&formFileFlag, "form-file", "", "Path of the form file to use")

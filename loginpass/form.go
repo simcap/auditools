@@ -11,6 +11,22 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
+type Input struct {
+	Name, Value string
+}
+
+type POST struct {
+	URL         string
+	Referer     string
+	ActionPath  string
+	ContentType string
+	Username    string
+	Password    string
+	TokenName   string
+	TokenVal    string
+	ExtraInputs []Input
+}
+
 type formPoster struct {
 	post *POST
 }
@@ -20,7 +36,7 @@ func (fp *formPoster) URL() string {
 }
 
 func (fp *formPoster) Try(username, pass string) (*Signature, error) {
-	token, cookie, err := fp.fetchAuthenticityTokenAndCookie()
+	token, cookie, err := fp.refreshAuthenticityTokenAndCookie()
 	if err != nil {
 		return nil, fmt.Errorf("grabing cookie and token: %s", err)
 	}
@@ -84,7 +100,7 @@ func (fp *formPoster) Try(username, pass string) (*Signature, error) {
 	return sig, err
 }
 
-func (c *formPoster) fetchAuthenticityTokenAndCookie() (string, *http.Cookie, error) {
+func (c *formPoster) refreshAuthenticityTokenAndCookie() (string, *http.Cookie, error) {
 	res, err := http.Get(c.URL())
 	if err != nil {
 		return "", nil, err
