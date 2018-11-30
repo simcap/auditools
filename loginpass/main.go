@@ -93,6 +93,8 @@ func main() {
 			passwords: fileToArr(passwordsFilepathFlag),
 		}
 
+		log.Printf("Estimated max time %d mins", (len(candidater.usernames)*len(candidater.usernames)*15)/60)
+
 		if err := candidater.Run(); err != nil {
 			log.Fatal(err)
 		}

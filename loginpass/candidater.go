@@ -40,7 +40,7 @@ func (c *Candidater) Run() error {
 			if s.IsCandidate(baseSig) {
 				c.candidates = append(c.candidates, fmt.Sprintf("%s|%s", user, pass))
 			}
-			wait := (5 + rand.Intn(6))
+			wait := (10 + rand.Intn(6))
 			time.Sleep(time.Duration(wait) * time.Second)
 		}
 	}
