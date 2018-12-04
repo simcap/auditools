@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -16,8 +17,10 @@ import (
 var (
 	urlFlag          string
 	formFileFlag     string
-	basicAuthURLFlag string
+	basicAuthFlag    bool
+	createFormFlag   bool
 	usernamesFlag    string
+	passwordStemFlag string
 	jitterFlag       int
 	waitTimeFlag     int
 	verboseFlag      bool
@@ -25,9 +28,11 @@ var (
 
 func main() {
 	flag.StringVar(&urlFlag, "url", "", "URL of the resource")
+	flag.BoolVar(&createFormFlag, "create-form", false, "Will create POST form in JSON format from gathered information from the given url")
 	flag.StringVar(&formFileFlag, "form-file", "", "Path of the form file to use")
-	flag.StringVar(&basicAuthURLFlag, "basicauth-url", "", "URL of the basic auth")
+	flag.BoolVar(&basicAuthFlag, "basicauth", false, "Basic authentication mode only (need url param)")
 	flag.StringVar(&usernamesFlag, "usernames", "", "Comma separated list of potential usernames")
+	flag.StringVar(&passwordStemFlag, "password-stem", "", "Base word (i.e. stem) to feed the password generator and derive potential password. If none, based on the given URL")
 	flag.IntVar(&waitTimeFlag, "wait", 5, "Wait time in seconds between 2 requests")
 	flag.IntVar(&jitterFlag, "jitter", 5, "Jitter interval in seconds to randomize wait time between requests")
 	flag.BoolVar(&verboseFlag, "v", false, "Verbose mode")
@@ -35,8 +40,8 @@ func main() {
 	flag.Parse()
 	log.SetFlags(0)
 
-	if urlFlag != "" {
-		if err := createFormFile(); err != nil {
+	if createFormFlag {
+		if err := createFormFile(urlFlag); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -56,17 +61,24 @@ func main() {
 		poster = &formPoster{post}
 	}
 
-	if basicAuthURLFlag != "" {
-		poster = &basicAuthPoster{basicAuthURLFlag}
+	if basicAuthFlag {
+		if urlFlag == "" {
+			log.Fatal(errors.New("missing url param when using basic auth"))
+		}
+		poster = &basicAuthPoster{urlFlag}
 	}
 
 	candidater := NewCandidater(poster)
 	candidater.usernames = strings.Split(usernamesFlag, ",")
-	candidater.passwords = passwords.Gen(poster.URL())
+	if passwordStemFlag == "" {
+		candidater.passwords = passwords.Gen(urlFlag)
+	} else {
+		candidater.passwords = passwords.Gen(passwordStemFlag)
+	}
 	candidater.waitTime = waitTimeFlag
 	candidater.jitter = jitterFlag
 
-	log.Printf("Estimated max time %d mins", candidater.EstimatedMaxTime())
+	log.Printf("Estimated max time %d mins (wait time: %d, jitter: %d, usernames: %d, password count: %d)", candidater.EstimatedMaxTime(), waitTimeFlag, jitterFlag, len(candidater.usernames), len(candidater.passwords))
 
 	if err := candidater.Run(); err != nil {
 		log.Fatal(err)
@@ -75,8 +87,11 @@ func main() {
 	log.Printf("Candidates: %v", candidater.candidates)
 }
 
-func createFormFile() error {
-	res, err := http.Get(urlFlag)
+func createFormFile(url string) error {
+	if url == "" {
+		return errors.New("create form: missing url")
+	}
+	res, err := http.Get(url)
 	if err != nil {
 		log.Fatal(err)
 	}

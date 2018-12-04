@@ -31,10 +31,6 @@ type formPoster struct {
 	post *POST
 }
 
-func (fp *formPoster) URL() string {
-	return fp.post.URL
-}
-
 func (fp *formPoster) Try(username, pass string) (*Signature, error) {
 	token, cookie, err := fp.refreshAuthenticityTokenAndCookie()
 	if err != nil {
@@ -42,7 +38,7 @@ func (fp *formPoster) Try(username, pass string) (*Signature, error) {
 	}
 	fp.post.TokenVal = token
 
-	u, err := url.ParseRequestURI(fp.URL())
+	u, err := url.ParseRequestURI(fp.post.URL)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +97,7 @@ func (fp *formPoster) Try(username, pass string) (*Signature, error) {
 }
 
 func (c *formPoster) refreshAuthenticityTokenAndCookie() (string, *http.Cookie, error) {
-	res, err := http.Get(c.URL())
+	res, err := http.Get(c.post.URL)
 	if err != nil {
 		return "", nil, err
 	}

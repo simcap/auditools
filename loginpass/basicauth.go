@@ -15,12 +15,8 @@ type basicAuthPoster struct {
 	url string
 }
 
-func (ba *basicAuthPoster) URL() string {
-	return ba.url
-}
-
 func (ba *basicAuthPoster) Try(username, pass string) (*Signature, error) {
-	req, err := http.NewRequest("GET", ba.URL(), nil)
+	req, err := http.NewRequest("GET", ba.url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +25,7 @@ func (ba *basicAuthPoster) Try(username, pass string) (*Signature, error) {
 
 	sig, resp, err := sendRequest(req)
 	if header := resp.Header.Get("WWW-Authenticate"); !strings.HasPrefix(header, "Basic") {
-		return nil, fmt.Errorf("Not basic authentication as %s does not respond as basic auth (header WWW-Authenticate=%s)", ba.URL(), header)
+		return nil, fmt.Errorf("Not basic authentication as %s does not respond as basic auth (header WWW-Authenticate=%s)", ba.url, header)
 	}
 
 	return sig, err

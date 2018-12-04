@@ -7,7 +7,6 @@ import (
 
 type Poster interface {
 	Try(username, pass string) (*Signature, error)
-	URL() string
 }
 
 type Signature struct {
