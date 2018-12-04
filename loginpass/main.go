@@ -15,15 +15,14 @@ import (
 )
 
 var (
-	urlFlag          string
-	formFileFlag     string
-	basicAuthFlag    bool
-	createFormFlag   bool
-	usernamesFlag    string
-	passwordStemFlag string
-	jitterFlag       int
-	waitTimeFlag     int
-	verboseFlag      bool
+	urlFlag        string
+	formFileFlag   string
+	basicAuthFlag  bool
+	createFormFlag bool
+	usernamesFlag  string
+	jitterFlag     int
+	waitTimeFlag   int
+	verboseFlag    bool
 )
 
 func main() {
@@ -32,7 +31,6 @@ func main() {
 	flag.StringVar(&formFileFlag, "form-file", "", "Path of the form file to use")
 	flag.BoolVar(&basicAuthFlag, "basicauth", false, "Basic authentication mode only (need url param)")
 	flag.StringVar(&usernamesFlag, "usernames", "", "Comma separated list of potential usernames")
-	flag.StringVar(&passwordStemFlag, "password-stem", "", "Base word (i.e. stem) to feed the password generator and derive potential password. If none, based on the given URL")
 	flag.IntVar(&waitTimeFlag, "wait", 5, "Wait time in seconds between 2 requests")
 	flag.IntVar(&jitterFlag, "jitter", 5, "Jitter interval in seconds to randomize wait time between requests")
 	flag.BoolVar(&verboseFlag, "v", false, "Verbose mode")
@@ -70,11 +68,12 @@ func main() {
 
 	candidater := NewCandidater(poster)
 	candidater.usernames = strings.Split(usernamesFlag, ",")
-	if passwordStemFlag == "" {
-		candidater.passwords = passwords.Gen(urlFlag)
-	} else {
-		candidater.passwords = passwords.Gen(passwordStemFlag)
+	options := passwords.Options{OrgOrURL: urlFlag}
+	if len(candidater.usernames) > 0 {
+		options.Firstname = strings.Split(candidater.usernames[0], "@")[0]
 	}
+	candidater.passwords = passwords.Generate(options)
+
 	candidater.waitTime = waitTimeFlag
 	candidater.jitter = jitterFlag
 
