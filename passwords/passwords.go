@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
 
 type generator func(s string) []string
@@ -17,9 +18,11 @@ func Gen(stem string) []string {
 	var all []string
 
 	funcs := []generator{
-		genUSCommon,
-		genUSKeyboardwalk,
-		tranToDigits(genFromURL),
+		capitalizer(
+			genCommon,
+			genKeyboardwalk,
+			lightLeetSpeaker(genFromStem),
+		),
 	}
 
 	unique := make(map[string]struct{})
@@ -37,7 +40,28 @@ func Gen(stem string) []string {
 	return all
 }
 
-func tranToDigits(g generator) generator {
+func capitalizer(gens ...generator) generator {
+	return func(s string) (all []string) {
+		for _, l := range concat(gens...)(s) {
+			all = append(all, l)
+			all = append(all, capitalize(l))
+		}
+		return
+	}
+}
+
+func concat(gens ...generator) generator {
+	return func(s string) (all []string) {
+		for _, g := range gens {
+			for _, l := range g(s) {
+				all = append(all, l)
+			}
+		}
+		return
+	}
+}
+
+func lightLeetSpeaker(g generator) generator {
 	replacer := strings.NewReplacer("o", "0", "i", "1", "e", "3")
 
 	return func(s string) (all []string) {
@@ -60,35 +84,33 @@ func tranToDigits(g generator) generator {
 	}
 }
 
-func genFromURL(websiteURL string) (list []string) {
-	u, err := url.ParseRequestURI(websiteURL)
-	if err != nil {
-		return
-	}
-	host := strings.ToLower(u.Hostname())
-
-	if ip := net.ParseIP(host); ip != nil {
+func genFromStem(stem string) (list []string) {
+	if ip := net.ParseIP(stem); ip != nil {
 		return
 	}
 
-	if last := strings.LastIndex(host, "."); last > 0 {
-		host = host[0:last]
-		if last := strings.LastIndex(host, "."); last > 0 && last < len(host) {
-			host = host[last+1:]
+	word := stem
+
+	if u, _ := url.ParseRequestURI(stem); u != nil && u.Hostname() != "" {
+		host := strings.ToLower(u.Hostname())
+		if last := strings.LastIndex(host, "."); last > 0 {
+			host = host[0:last]
+			if last := strings.LastIndex(host, "."); last > 0 && last < len(host) {
+				host = host[last+1:]
+			}
 		}
+		word = host
 	}
 
 	today := time.Now()
-	for _, s := range []string{host, capitalize(host)} {
-		list = append(list, fmt.Sprintf("%s%d", s, today.Year()))
-		list = append(list, fmt.Sprintf("%s%d", s, today.AddDate(-1, 0, 0).Year()))
-		list = append(list, fmt.Sprintf("%s%d", s, today.AddDate(-2, 0, 0).Year()))
-	}
+	list = append(list, fmt.Sprintf("%s%d", word, today.Year()))
+	list = append(list, fmt.Sprintf("%s%d", word, today.AddDate(-1, 0, 0).Year()))
+	list = append(list, fmt.Sprintf("%s%d", word, today.AddDate(-2, 0, 0).Year()))
 
 	return
 }
 
-func genUSCommon(string) []string {
+func genCommon(string) []string {
 	return []string{
 		"12345678",
 		"123456789",
@@ -96,22 +118,29 @@ func genUSCommon(string) []string {
 		"qwertyui",
 		"asdfghjk",
 		"passw0rd",
-		"Password123!",
+		"password123!",
+		"password1234",
 		"1qa2ws3ed4rf",
 		"1q2w3e4r5t6y",
 	}
 }
 
-func genUSKeyboardwalk(string) []string {
+func genKeyboardwalk(string) []string {
 	return []string{
+		// qwerty keyboard
 		"1qa2ws3ed4rf",
 		"1q2w3e4r5t6y",
+		// azerty keyboard
+		"1aq2sz3de4rf",
+		"1a2z3e4r5t6y",
 	}
 }
 
 func capitalize(s string) string {
 	if len(s) > 0 {
-		return fmt.Sprintf("%s%s", strings.ToUpper(string(s[0])), s[1:])
+		if first := s[0]; unicode.IsLetter(rune(first)) {
+			return fmt.Sprintf("%s%s", strings.ToUpper(string(first)), s[1:])
+		}
 	}
 	return s
 }
