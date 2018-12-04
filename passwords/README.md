@@ -3,11 +3,11 @@
 Simple library for password generation
 
     * top common passwords
-    * passwords with common patterns given a base word (i.e. stem)
+    * passwords with common patterns given a org, URL or firstname
 
 To see it in action:
 
 ```
-go test -stem https://www.mycompany.com
-go test -stem loveyou
+go test -org-or-url https://www.mycompany.com
+go test -first julia
 ```

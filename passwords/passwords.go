@@ -10,24 +10,37 @@ import (
 	"unicode"
 )
 
-type generator func(s string) []string
+type generatorFunc func(g Options) []string
 
-type transform func(g generator, s string) generator
+type transformFunc func(g generatorFunc, s string) generatorFunc
 
-func Gen(stem string) []string {
+type Options struct {
+	Firstname string
+	OrgOrURL  string
+}
+
+func Generate(opts Options) []string {
 	var all []string
 
-	funcs := []generator{
-		capitalizer(
-			genCommon,
-			genKeyboardwalk,
-			lightLeetSpeaker(genFromStem),
-		),
+	funcs := []generatorFunc{
+		capitalizer(genCommon, genKeyboardwalk),
+	}
+
+	if opts.Firstname != "" {
+		funcs = append(funcs,
+			capitalizer(lightLeetSpeaker(genFromFirstname)),
+		)
+	}
+
+	if opts.OrgOrURL != "" {
+		funcs = append(funcs,
+			capitalizer(lightLeetSpeaker(genFromOrgOrURL)),
+		)
 	}
 
 	unique := make(map[string]struct{})
 	for _, g := range funcs {
-		for _, pass := range g(stem) {
+		for _, pass := range g(opts) {
 			unique[pass] = struct{}{}
 		}
 	}
@@ -40,9 +53,9 @@ func Gen(stem string) []string {
 	return all
 }
 
-func capitalizer(gens ...generator) generator {
-	return func(s string) (all []string) {
-		for _, l := range concat(gens...)(s) {
+func capitalizer(gens ...generatorFunc) generatorFunc {
+	return func(opts Options) (all []string) {
+		for _, l := range concat(gens...)(opts) {
 			all = append(all, l)
 			all = append(all, capitalize(l))
 		}
@@ -50,10 +63,10 @@ func capitalizer(gens ...generator) generator {
 	}
 }
 
-func concat(gens ...generator) generator {
-	return func(s string) (all []string) {
+func concat(gens ...generatorFunc) generatorFunc {
+	return func(opts Options) (all []string) {
 		for _, g := range gens {
-			for _, l := range g(s) {
+			for _, l := range g(opts) {
 				all = append(all, l)
 			}
 		}
@@ -61,11 +74,11 @@ func concat(gens ...generator) generator {
 	}
 }
 
-func lightLeetSpeaker(g generator) generator {
+func lightLeetSpeaker(g generatorFunc) generatorFunc {
 	replacer := strings.NewReplacer("o", "0", "i", "1", "e", "3")
 
-	return func(s string) (all []string) {
-		for _, l := range g(s) {
+	return func(opts Options) (all []string) {
+		for _, l := range g(opts) {
 			all = append(all, l)
 			all = append(all,
 				strings.Replace(l, "o", "0", -1),
@@ -84,14 +97,28 @@ func lightLeetSpeaker(g generator) generator {
 	}
 }
 
-func genFromStem(stem string) (list []string) {
-	if ip := net.ParseIP(stem); ip != nil {
+const (
+	maxAge = 50
+	minAge = 30
+)
+
+func genFromFirstname(opts Options) (list []string) {
+	name := opts.Firstname
+	year := time.Now().Year()
+	for i := year - maxAge; i <= year-minAge; i++ {
+		list = append(list, fmt.Sprintf("%s%d", name, i))
+	}
+	return
+}
+
+func genFromOrgOrURL(opts Options) (list []string) {
+	if ip := net.ParseIP(opts.OrgOrURL); ip != nil {
 		return
 	}
 
-	word := stem
+	word := opts.OrgOrURL
 
-	if u, _ := url.ParseRequestURI(stem); u != nil && u.Hostname() != "" {
+	if u, _ := url.ParseRequestURI(opts.OrgOrURL); u != nil && u.Hostname() != "" {
 		host := strings.ToLower(u.Hostname())
 		if last := strings.LastIndex(host, "."); last > 0 {
 			host = host[0:last]
@@ -110,7 +137,7 @@ func genFromStem(stem string) (list []string) {
 	return
 }
 
-func genCommon(string) []string {
+func genCommon(Options) []string {
 	return []string{
 		"12345678",
 		"123456789",
@@ -125,7 +152,7 @@ func genCommon(string) []string {
 	}
 }
 
-func genKeyboardwalk(string) []string {
+func genKeyboardwalk(Options) []string {
 	return []string{
 		// qwerty keyboard
 		"1qa2ws3ed4rf",

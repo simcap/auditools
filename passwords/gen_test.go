@@ -8,14 +8,17 @@ import (
 	"github.com/simcap/sectools/passwords"
 )
 
-var stemFlag = flag.String("stem", "https://facebook.com", "Stem used to generate some passwords")
+var opts passwords.Options
+
+func init() {
+	flag.StringVar(&opts.OrgOrURL, "org-or-url", "", "Org or url to generate passwords from")
+	flag.StringVar(&opts.Firstname, "firstname", "", "Firstname to generate passwords from")
+}
 
 func TestGenerateToExploreOutput(t *testing.T) {
 	flag.Parse()
 
-	fmt.Printf("Generating with stem %s\n\n", *stemFlag)
-
-	for _, p := range passwords.Gen(*stemFlag) {
+	for _, p := range passwords.Generate(opts) {
 		fmt.Println(p)
 	}
 }
