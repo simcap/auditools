@@ -42,6 +42,7 @@ func main() {
 		if err := createFormFile(urlFlag); err != nil {
 			log.Fatal(err)
 		}
+		return
 	}
 
 	var poster Poster
@@ -69,9 +70,6 @@ func main() {
 	candidater := NewCandidater(poster)
 	candidater.usernames = strings.Split(usernamesFlag, ",")
 	options := passwords.Options{OrgOrURL: urlFlag}
-	if len(candidater.usernames) > 0 {
-		options.Firstname = strings.Split(candidater.usernames[0], "@")[0]
-	}
 	candidater.passwords = passwords.Generate(options)
 
 	candidater.waitTime = waitTimeFlag
@@ -125,6 +123,15 @@ func createFormFile(url string) error {
 			form = current
 			post.ActionPath = action
 		}
+	})
+
+	doc.Find("form input[name='password']").Each(func(i int, s *goquery.Selection) {
+		s.Parents().Each(func(i int, s *goquery.Selection) {
+			if goquery.NodeName(s) == "form" {
+				post.ActionPath, _ = s.Attr("action")
+				form = s
+			}
+		})
 	})
 
 	if form == nil {

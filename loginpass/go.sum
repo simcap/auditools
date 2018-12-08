@@ -10,6 +10,8 @@ github.com/simcap/sectools/passwords v0.0.0-20181204142527-7497bf963c9c h1:rHVI4
 github.com/simcap/sectools/passwords v0.0.0-20181204142527-7497bf963c9c/go.mod h1:O4gd92pfFi9dQ9HgQGCJZOn1+c59hBVxXNYzs3OeWM4=
 github.com/simcap/sectools/passwords v0.0.0-20181204170909-08e837f6df52 h1:/b7phNZLQFDpE6yOTIT5q3gPMaV/HxUKavOw37cOqiE=
 github.com/simcap/sectools/passwords v0.0.0-20181204170909-08e837f6df52/go.mod h1:O4gd92pfFi9dQ9HgQGCJZOn1+c59hBVxXNYzs3OeWM4=
+github.com/simcap/sectools/passwords v0.0.0-20181205163142-38b81c20cfa1 h1:hrCujnUb3LuJVJc4UCPZZ972c0H38++pIN+mR2ycA9c=
+github.com/simcap/sectools/passwords v0.0.0-20181205163142-38b81c20cfa1/go.mod h1:O4gd92pfFi9dQ9HgQGCJZOn1+c59hBVxXNYzs3OeWM4=
 golang.org/x/net v0.0.0-20180218175443-cbe0f9307d01/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
 golang.org/x/net v0.0.0-20181114220301-adae6a3d119a h1:gOpx8G595UYyvj8UK4+OFyY4rx037g3fmfhe5SasG3U=
 golang.org/x/net v0.0.0-20181114220301-adae6a3d119a/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
