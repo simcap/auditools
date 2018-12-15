@@ -92,8 +92,8 @@ func createFormFile(url string) error {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	defer res.Body.Close()
+
 	if res.StatusCode != 200 {
 		log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
 	}
@@ -116,16 +116,7 @@ func createFormFile(url string) error {
 	}
 
 	var form *goquery.Selection
-	doc.Find(fmt.Sprintf("form input[name='%s']", param)).Each(func(i int, s *goquery.Selection) {
-		current := s.Parents().First()
-		action, _ := current.Attr("action")
-		if strings.Contains(action, "sign") || strings.Contains(action, "login") {
-			form = current
-			post.ActionPath = action
-		}
-	})
-
-	doc.Find("form input[name='password']").Each(func(i int, s *goquery.Selection) {
+	doc.Find("input[type='password']").Each(func(i int, s *goquery.Selection) {
 		s.Parents().Each(func(i int, s *goquery.Selection) {
 			if goquery.NodeName(s) == "form" {
 				post.ActionPath, _ = s.Attr("action")
