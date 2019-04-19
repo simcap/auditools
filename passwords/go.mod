@@ -1,3 +1,3 @@
-module github.com/simcap/sectools/passwords
+module github.com/simcap/auditools/passwords
 
 go 1.12
