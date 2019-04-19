@@ -78,6 +78,7 @@ func (fp *formPoster) Try(username, pass string) (*Signature, error) {
 
 	req, err := http.NewRequest("POST", u.String(), strings.NewReader(body))
 	req.Header.Add("Content-Length", strconv.Itoa(len(body)))
+	req.Header.Add("Accept", "*/*")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0")
 	if fp.post.ContentType == "application/json" {
 		req.Header.Add("Content-Type", "application/json")
