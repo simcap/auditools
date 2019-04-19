@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -130,9 +131,14 @@ func genFromOrgOrURL(opts Options) (list []string) {
 	}
 
 	today := time.Now()
-	list = append(list, fmt.Sprintf("%s%d", word, today.Year()))
-	list = append(list, fmt.Sprintf("%s%d", word, today.AddDate(-1, 0, 0).Year()))
-	list = append(list, fmt.Sprintf("%s%d", word, today.AddDate(-2, 0, 0).Year()))
+	for i := 4; i > -1; i-- {
+		year := today.AddDate(-i, 0, 0).Year()
+		shortYear := strconv.Itoa(year)[2:]
+		list = append(list, fmt.Sprintf("%s%d", word, year))
+		list = append(list, fmt.Sprintf("%s%s", word, shortYear))
+		list = append(list, fmt.Sprintf("%s@%d", word, year))
+		list = append(list, fmt.Sprintf("%s@%s", word, shortYear))
+	}
 
 	return
 }
