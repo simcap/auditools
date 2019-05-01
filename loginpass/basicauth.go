@@ -61,12 +61,14 @@ func sendRequest(req *http.Request) (*Signature, *http.Response, error) {
 		return nil, resp, err
 	}
 
+	verbose("-> Response %s\n", resp.Status)
+
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, resp, err
 	}
 	if len(b) < 200 {
-		verbose("----------- Response---------\n%s\n-----------------------------", b)
+		verbose("----------- Response Body ---------\n%s\n-----------------------------", b)
 	}
 
 	sig := &Signature{

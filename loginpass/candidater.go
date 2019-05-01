@@ -41,6 +41,8 @@ func (c *Candidater) Run() error {
 		return err
 	}
 
+	c.logger.Printf("base signature %s", baseSig)
+
 	for _, user := range c.usernames {
 		for _, pass := range c.passwords {
 			s, err := c.poster.Try(user, pass)

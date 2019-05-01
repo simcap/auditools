@@ -16,27 +16,31 @@ type generatorFunc func(g Options) []string
 type transformFunc func(g generatorFunc, s string) generatorFunc
 
 type Options struct {
+	Depth     int
 	Firstname string
 	OrgOrURL  string
 }
 
 func Generate(opts Options) []string {
 	var all []string
+	var funcs []generatorFunc
 
-	funcs := []generatorFunc{
-		capitalizer(genCommon, genKeyboardwalk),
+	depth := opts.Depth
+	if depth < 0 {
+		depth = 0
 	}
 
-	if opts.Firstname != "" {
-		funcs = append(funcs,
-			capitalizer(lightLeetSpeaker(genFromFirstname)),
-		)
-	}
+	basic := concat(genCommon, genKeyboardwalk, genFromFirstname, genFromOrgOrURL)
 
-	if opts.OrgOrURL != "" {
-		funcs = append(funcs,
-			capitalizer(lightLeetSpeaker(genFromOrgOrURL)),
-		)
+	switch depth {
+	case 0:
+		funcs = append(funcs, basic)
+	case 1:
+		funcs = append(funcs, capitalizer(basic))
+	case 2:
+		funcs = append(funcs, lightLeetSpeaker(basic))
+	default:
+		funcs = append(funcs, capitalizer(lightLeetSpeaker(basic)))
 	}
 
 	unique := make(map[string]struct{})
@@ -104,6 +108,9 @@ const (
 )
 
 func genFromFirstname(opts Options) (list []string) {
+	if opts.Firstname == "" {
+		return
+	}
 	name := opts.Firstname
 	year := time.Now().Year()
 	for i := year - maxAge; i <= year-minAge; i++ {
@@ -113,6 +120,10 @@ func genFromFirstname(opts Options) (list []string) {
 }
 
 func genFromOrgOrURL(opts Options) (list []string) {
+	if opts.OrgOrURL == "" {
+		return
+	}
+
 	if ip := net.ParseIP(opts.OrgOrURL); ip != nil {
 		return
 	}

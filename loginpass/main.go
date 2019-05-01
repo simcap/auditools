@@ -11,26 +11,26 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/simcap/sectools/passwords"
+	"github.com/simcap/auditools/passwords"
 )
 
 var (
-	urlFlag        string
-	formFileFlag   string
-	basicAuthFlag  bool
-	createFormFlag bool
-	usernamesFlag  string
-	jitterFlag     int
-	waitTimeFlag   int
-	verboseFlag    bool
+	urlFlag          string
+	basicAuthFlag    bool
+	usernameListFlag string
+	passwordListFlag string
+	passwordDepth    int
+	jitterFlag       int
+	waitTimeFlag     int
+	verboseFlag      bool
 )
 
 func main() {
 	flag.StringVar(&urlFlag, "url", "", "URL of the resource")
-	flag.BoolVar(&createFormFlag, "create-form", false, "Will create POST form in JSON format from gathered information from the given url")
-	flag.StringVar(&formFileFlag, "form-file", "", "Path of the form file to use")
 	flag.BoolVar(&basicAuthFlag, "basicauth", false, "Basic authentication mode only (need url param)")
-	flag.StringVar(&usernamesFlag, "usernames", "", "Comma separated list of potential usernames")
+	flag.IntVar(&passwordDepth, "passdepth", 0, "Level of passwords generations & permutations")
+	flag.StringVar(&usernameListFlag, "usernames", "admin", "Comma separated list of given usernames")
+	flag.StringVar(&passwordListFlag, "passwords", "", "Comma separated list of given password (overwrite password generation)")
 	flag.IntVar(&waitTimeFlag, "wait", 5, "Wait time in seconds between 2 requests")
 	flag.IntVar(&jitterFlag, "jitter", 5, "Jitter interval in seconds to randomize wait time between requests")
 	flag.BoolVar(&verboseFlag, "v", false, "Verbose mode")
@@ -38,55 +38,44 @@ func main() {
 	flag.Parse()
 	log.SetFlags(0)
 
-	if createFormFlag {
-		if err := createFormFile(urlFlag); err != nil {
-			log.Fatal(err)
-		}
-		return
-	}
-
 	var poster Poster
-	if formFileFlag != "" {
-		file, err := os.Open(formFileFlag)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer file.Close()
-
-		post := new(POST)
-		if err := json.NewDecoder(file).Decode(post); err != nil {
-			log.Fatal(err)
-		}
-		poster = &formPoster{post}
-	}
-
 	if basicAuthFlag {
 		if urlFlag == "" {
 			log.Fatal(errors.New("missing url param when using basic auth"))
 		}
 		poster = &basicAuthPoster{urlFlag}
+	} else {
+		postForm, err := createPOSTForm(urlFlag)
+		if err != nil {
+			log.Fatal(err)
+		}
+		poster = &formPoster{postForm}
 	}
 
 	candidater := NewCandidater(poster)
-	candidater.usernames = strings.Split(usernamesFlag, ",")
-	options := passwords.Options{OrgOrURL: urlFlag}
-	candidater.passwords = passwords.Generate(options)
-
+	candidater.usernames = strings.Split(usernameListFlag, ",")
+	if passwordListFlag != "" {
+		candidater.passwords = strings.Split(passwordListFlag, ",")
+	} else {
+		options := passwords.Options{OrgOrURL: urlFlag}
+		candidater.passwords = passwords.Generate(options)
+	}
 	candidater.waitTime = waitTimeFlag
 	candidater.jitter = jitterFlag
 
-	log.Printf("Estimated max time %d mins (wait time: %d, jitter: %d, usernames: %d, password count: %d)", candidater.EstimatedMaxTime(), waitTimeFlag, jitterFlag, len(candidater.usernames), len(candidater.passwords))
+	log.Printf("\nEstimated max time %d mins (wait time: %d, jitter: %d, usernames: %d, password count: %d)", candidater.EstimatedMaxTime(), waitTimeFlag, jitterFlag, len(candidater.usernames), len(candidater.passwords))
 
-	if err := candidater.Run(); err != nil {
-		log.Fatal(err)
+	if confirm() {
+		if err := candidater.Run(); err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Candidates: %v", candidater.candidates)
 	}
-
-	log.Printf("Candidates: %v", candidater.candidates)
 }
 
-func createFormFile(url string) error {
+func createPOSTForm(url string) (*POST, error) {
 	if url == "" {
-		return errors.New("create form: missing url")
+		return nil, errors.New("create form: missing url")
 	}
 	res, err := http.Get(url)
 	if err != nil {
@@ -126,7 +115,7 @@ func createFormFile(url string) error {
 	})
 
 	if form == nil {
-		return fmt.Errorf("no form found at %s", urlFlag)
+		return nil, fmt.Errorf("no form found at %s", urlFlag)
 	}
 
 	var inputs []Input
@@ -151,11 +140,24 @@ func createFormFile(url string) error {
 
 	}
 
+	log.Println("created POST form")
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", " ")
 	enc.Encode(post)
 
-	return nil
+	return post, nil
+}
+
+func confirm() bool {
+	var s string
+	fmt.Printf("\nRun (y/N)? ")
+	if _, err := fmt.Scan(&s); err != nil {
+		log.Fatal(err)
+	}
+
+	s = strings.TrimSpace(strings.ToLower(s))
+
+	return s == "y" || s == "yes"
 }
 
 func verbose(msg string, a ...interface{}) {
