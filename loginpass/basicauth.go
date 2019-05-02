@@ -24,8 +24,9 @@ func (ba *basicAuthPoster) Try(username, pass string) (*Signature, error) {
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0")
 
 	sig, resp, err := sendRequest(req)
-	if header := resp.Header.Get("WWW-Authenticate"); !strings.HasPrefix(header, "Basic") {
-		return nil, fmt.Errorf("Not basic authentication as %s does not respond as basic auth (header WWW-Authenticate=%s)", ba.url, header)
+	canonical := http.CanonicalHeaderKey("WWW-Authenticate")
+	if header := resp.Header.Get(canonical); resp.StatusCode != 200 && !strings.HasPrefix(header, "Basic") {
+		return nil, fmt.Errorf("Not basic authentication as %s does not respond as basic auth (header %s=%q)", ba.url, canonical, header)
 	}
 
 	return sig, err
