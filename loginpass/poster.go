@@ -10,6 +10,7 @@ type Poster interface {
 }
 
 type Signature struct {
+	Username             string
 	RedirectCount        int
 	StatusCode           int
 	ResponseSize         int
@@ -17,7 +18,7 @@ type Signature struct {
 }
 
 func (s Signature) String() string {
-	return fmt.Sprintf("Redirects: %d, Status: %d, Length: %d, ServerProcessing: %s", s.RedirectCount, s.StatusCode, s.ResponseSize, s.ServerProcessingTime)
+	return fmt.Sprintf("Redirects: %d, Status: %d, Length: %d, NormalizedLength: %d, ServerProcessing: %s", s.RedirectCount, s.StatusCode, s.ResponseSize, s.ResponseSize-2*len(s.Username), s.ServerProcessingTime)
 }
 
 func (s Signature) IsCandidate(base *Signature) bool {

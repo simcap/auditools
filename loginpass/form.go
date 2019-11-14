@@ -95,6 +95,7 @@ func (fp *formPoster) Try(username, pass string) (*Signature, error) {
 	}
 
 	sig, _, err := sendRequest(req)
+	sig.Username = username
 
 	return sig, err
 }
