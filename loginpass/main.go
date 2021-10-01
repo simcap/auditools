@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -23,6 +24,7 @@ var (
 	postURLFlag      string
 	ssrFlag          bool
 	postJSONFlag     bool
+	formFileFlag     string
 	basicAuthFlag    bool
 	usernameListFlag string
 	passwordListFlag string
@@ -35,6 +37,7 @@ var (
 func main() {
 	flag.StringVar(&urlFlag, "url", "", "URL of the resource")
 	flag.StringVar(&postURLFlag, "post-url", "", "URL to post the form if different from page form")
+	flag.StringVar(&formFileFlag, "form-file", "", "JSON ready form to feed into a poster")
 	flag.BoolVar(&ssrFlag, "ssr", false, "Use SSR to get HTML page content")
 	flag.BoolVar(&postJSONFlag, "json", false, "Use JSON to post form")
 	flag.BoolVar(&basicAuthFlag, "basicauth", false, "Basic authentication mode only (need url param)")
@@ -55,10 +58,28 @@ func main() {
 		}
 		poster = &basicAuthPoster{urlFlag}
 	} else {
-		postForm, err := createPOSTForm(urlFlag)
-		if err != nil {
-			log.Fatal(err)
+		var (
+			postForm *POST
+			formErr  error
+		)
+		if formFileFlag != "" {
+			f, err := os.Open(formFileFlag)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err := json.NewDecoder(f).Decode(&postForm); err != nil {
+				log.Fatal(err)
+			}
+		} else {
+			postForm, formErr = createPOSTForm(urlFlag)
+			if formErr != nil {
+				log.Fatal(formErr)
+			}
 		}
+
+		log.Println("POST form")
+		printJSON(postForm)
+
 		if postJSONFlag {
 			postForm.ContentType = "application/json"
 		}
@@ -74,7 +95,7 @@ func main() {
 	if passwordListFlag != "" {
 		candidater.passwords = strings.Split(passwordListFlag, ",")
 	} else {
-		options := passwords.Options{OrgOrURL: urlFlag}
+		options := passwords.Options{OrgOrURL: urlFlag, Depth: passwordDepth}
 		candidater.passwords = passwords.Generate(options)
 	}
 	candidater.waitTime = waitTimeFlag
@@ -90,20 +111,20 @@ func main() {
 	}
 }
 
-func createPOSTForm(url string) (*POST, error) {
-	if url == "" {
+func createPOSTForm(pageURL string) (*POST, error) {
+	if pageURL == "" {
 		return nil, errors.New("create form: missing url")
 	}
 
 	var html io.Reader
 	if ssrFlag {
-		body, err := SSR(url)
+		body, err := SSR(pageURL)
 		if err != nil {
 			log.Fatal(err)
 		}
 		html = strings.NewReader(body)
 	} else {
-		res, err := http.Get(url)
+		res, err := http.Get(pageURL)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -133,13 +154,16 @@ func createPOSTForm(url string) (*POST, error) {
 	}
 
 	var form *goquery.Selection
-	doc.Find("input[type='password']").Each(func(i int, s *goquery.Selection) {
-		s.Parents().Each(func(i int, s *goquery.Selection) {
-			if goquery.NodeName(s) == "form" {
-				post.ActionPath, _ = s.Attr("action")
-				form = s
+	passwordSection := doc.Find("input[type='password']").First()
+	passwordSection.Parents().Each(func(i int, s *goquery.Selection) {
+		if goquery.NodeName(s) == "form" {
+			action, _ := s.Attr("action")
+			u, err := url.Parse(action)
+			if err != nil {
+				post.ActionPath = u.Path
 			}
-		})
+			form = s
+		}
 	})
 
 	if form == nil {
@@ -162,18 +186,19 @@ func createPOSTForm(url string) (*POST, error) {
 			post.Username = in.Name
 			continue
 		}
-		if in.Value != "" && in.Name != "authenticity_token" {
+		if (in.Value != "" && in.Name != "") && in.Name != "authenticity_token" {
 			post.ExtraInputs = append(post.ExtraInputs, in)
 		}
 
 	}
 
-	log.Println("created POST form")
+	return post, nil
+}
+
+func printJSON(v interface{}) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", " ")
-	enc.Encode(post)
-
-	return post, nil
+	enc.Encode(v)
 }
 
 func SSR(url string) (content string, err error) {

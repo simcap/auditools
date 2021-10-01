@@ -25,6 +25,9 @@ func (s Signature) IsCandidate(base *Signature) bool {
 	if s.RedirectCount != base.RedirectCount || s.StatusCode != base.StatusCode {
 		return true
 	}
+	if base.ResponseSize == s.ResponseSize {
+		return false
+	}
 	if (s.ResponseSize/base.ResponseSize)*10 > 11 {
 		return true
 	}

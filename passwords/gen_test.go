@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/simcap/sectools/passwords"
+	"github.com/simcap/auditools/passwords"
 )
 
 var opts passwords.Options
