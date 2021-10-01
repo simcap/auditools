@@ -1,21 +1,28 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/chromedp/cdproto/security"
+	"github.com/chromedp/chromedp"
 	"github.com/simcap/auditools/passwords"
 )
 
 var (
 	urlFlag          string
+	postURLFlag      string
+	ssrFlag          bool
+	postJSONFlag     bool
 	basicAuthFlag    bool
 	usernameListFlag string
 	passwordListFlag string
@@ -27,6 +34,9 @@ var (
 
 func main() {
 	flag.StringVar(&urlFlag, "url", "", "URL of the resource")
+	flag.StringVar(&postURLFlag, "post-url", "", "URL to post the form if different from page form")
+	flag.BoolVar(&ssrFlag, "ssr", false, "Use SSR to get HTML page content")
+	flag.BoolVar(&postJSONFlag, "json", false, "Use JSON to post form")
 	flag.BoolVar(&basicAuthFlag, "basicauth", false, "Basic authentication mode only (need url param)")
 	flag.IntVar(&passwordDepth, "passdepth", 0, "Level of passwords generations & permutations")
 	flag.StringVar(&usernameListFlag, "usernames", "admin", "Comma separated list of given usernames")
@@ -48,6 +58,13 @@ func main() {
 		postForm, err := createPOSTForm(urlFlag)
 		if err != nil {
 			log.Fatal(err)
+		}
+		if postJSONFlag {
+			postForm.ContentType = "application/json"
+		}
+		if postURLFlag != "" {
+			postForm.URL = postURLFlag
+			postForm.ActionPath = ""
 		}
 		poster = &formPoster{postForm}
 	}
@@ -77,17 +94,28 @@ func createPOSTForm(url string) (*POST, error) {
 	if url == "" {
 		return nil, errors.New("create form: missing url")
 	}
-	res, err := http.Get(url)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer res.Body.Close()
 
-	if res.StatusCode != 200 {
-		log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
+	var html io.Reader
+	if ssrFlag {
+		body, err := SSR(url)
+		if err != nil {
+			log.Fatal(err)
+		}
+		html = strings.NewReader(body)
+	} else {
+		res, err := http.Get(url)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != 200 {
+			log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
+		}
+		html = res.Body
 	}
 
-	doc, err := goquery.NewDocumentFromReader(res.Body)
+	doc, err := goquery.NewDocumentFromReader(html)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -146,6 +174,15 @@ func createPOSTForm(url string) (*POST, error) {
 	enc.Encode(post)
 
 	return post, nil
+}
+
+func SSR(url string) (content string, err error) {
+	security.SetIgnoreCertificateErrors(true)
+	ctx, cancel := chromedp.NewContext(context.Background())
+	defer cancel()
+
+	err = chromedp.Run(ctx, chromedp.Navigate(url), chromedp.InnerHTML("html", &content))
+	return
 }
 
 func confirm() bool {

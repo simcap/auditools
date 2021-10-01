@@ -43,7 +43,7 @@ func (fp *formPoster) Try(username, pass string) (*Signature, error) {
 		return nil, err
 	}
 
-	if !strings.HasPrefix(fp.post.ActionPath, "http") {
+	if fp.post.ActionPath != "" && !strings.HasPrefix(fp.post.ActionPath, "http") {
 		u.Path = fp.post.ActionPath
 	}
 	verbose("Posting at %s", u)
